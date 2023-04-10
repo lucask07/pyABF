@@ -6,17 +6,21 @@ headers are simpler than ABF2 files.
 Many values (e.g., epoch waveform table) are left blank, so when they are read 
 by an ABF reader their values may not make sense (especially when converted to 
 floating-point numbers).
+
+Lucas Koerner, modifications to support multiple channels with different names and units 2023/4/10
+
 """
 
 import struct
 import numpy as np
 
 
-def writeABF1(sweepData, filename, sampleRateHz, units='pA'):
+def writeABF1(sweepData, filename, sampleRateHz, units='pA', nADCNumChannels=1, FLOAT=False):
     """
     Create an ABF1 file from scratch and write it to disk.
     Files created with this function are compatible with MiniAnalysis.
     Data is expected to be a 2D numpy array (each row is a sweep).
+    FLOAT=True is not supported by pyABF reader nor clampFit
     """
 
     assert isinstance(sweepData, np.ndarray)
@@ -42,8 +46,11 @@ def writeABF1(sweepData, filename, sampleRateHz, units='pA'):
     struct.pack_into('i', data, 10, dataPointCount)  # lActualAcqLength
     struct.pack_into('i', data, 16, sweepCount)  # lActualEpisodes
     struct.pack_into('i', data, 40, HEADER_BLOCKS)  # lDataSectionPtr
-    struct.pack_into('h', data, 100, 0)  # nDataFormat is 1 for float32
-    struct.pack_into('h', data, 120, 1)  # nADCNumChannels
+    if FLOAT:
+        struct.pack_into('h', data, 100, 1)  # nDataFormat is 1 for float32 -- not supported in pyABF and crashes clampFit
+    else:
+        struct.pack_into('h', data, 100, 0)  # nDataFormat is 1 for float32
+    struct.pack_into('h', data, 120, nADCNumChannels)  # nADCNumChannels
     struct.pack_into('f', data, 122, 1e6 / sampleRateHz)  # fADCSampleInterval
     struct.pack_into('i', data, 138, sweepPointCount)  # lNumSamplesPerEpisode
 
@@ -69,21 +76,44 @@ def writeABF1(sweepData, filename, sampleRateHz, units='pA'):
             break
 
     # prepare units as a space-padded 8-byte string
-    unitString = units
-    while len(unitString) < 8:
-        unitString = unitString + " "
+    # array up to 16 
+    units = [units] if isinstance(units, str) else units 
+    unitString = []
+    names = []
 
+    for i in range(16):
+        try:
+            unitString.append(units[i])
+        except:
+            unitString.append(units[-1]) # if units is not long enough use the last one 
+        while len(unitString[i]) < 8: # pad with spaces 
+            unitString[i] = unitString[i] + " "
+        names.append(f'V{i}')
+        while len(names[i])<10:
+            names[i] = names[i] + " "
+
+    print(names)
+    print(unitString)
     # store the scale data in the header
     struct.pack_into('i', data, 252, lADCResolution)
     struct.pack_into('f', data, 244, fADCRange)
     for i in range(16):
+        print(f'Unit string {unitString[i]} and name {names[i]}')
         struct.pack_into('f', data, 922+i*4, fInstrumentScaleFactor)
         struct.pack_into('f', data, 1050+i*4, fSignalGain)
         struct.pack_into('f', data, 730+i*4, fADCProgrammableGain)
-        struct.pack_into('8s', data, 602+i*8, unitString.encode())
-
+        struct.pack_into('8s', data, 602+i*8, unitString[i].encode()) #sADCUnits
+        struct.pack_into('10s', data, 442+i*10, names[i].encode()) #sADCChannelName
+        # sampling sequence   # short is h 
+        struct.pack_into('h', data, 378+i*2, i) #nADCPtoLChannelMap        # ADC PtoL physical to logical Map 
+        if i < nADCNumChannels:
+            struct.pack_into('h', data, 410+i*2, i) #nADCSamplingSeq
+        else:
+            struct.pack_into('h', data, 410+i*2, -1) #nADCSamplingSeq    
+            
     # fill data portion with scaled data from signal
     dataByteOffset = BLOCKSIZE * HEADER_BLOCKS
+    print(f'databyteOffset {dataByteOffset}; greatest header offset {1050+i*15}')
     for sweepNumber, sweepSignal in enumerate(sweepData):
         sweepByteOffset = sweepNumber * sweepPointCount * bytesPerPoint
         for valueNumber, value in enumerate(sweepSignal):
