@@ -7,7 +7,9 @@ Many values (e.g., epoch waveform table) are left blank, so when they are read
 by an ABF reader their values may not make sense (especially when converted to 
 floating-point numbers).
 
-Lucas Koerner, modifications to support multiple channels with different names and units 2023/4/10
+Lucas Koerner:
+* modifications to support multiple channels with different names and units 2023/4/10
+* modify so that FLOAT data format works 
 
 """
 
@@ -15,12 +17,11 @@ import struct
 import numpy as np
 
 
-def writeABF1(sweepData, filename, sampleRateHz, units='pA', nADCNumChannels=1, FLOAT=False):
+def writeABF1(sweepData, filename, sampleRateHz, units='pA', nADCNumChannels=1, FLOAT=False, names_input = []):
     """
     Create an ABF1 file from scratch and write it to disk.
     Files created with this function are compatible with MiniAnalysis.
     Data is expected to be a 2D numpy array (each row is a sweep).
-    FLOAT=True is not supported by pyABF reader nor clampFit
     """
 
     assert isinstance(sweepData, np.ndarray)
@@ -35,7 +36,11 @@ def writeABF1(sweepData, filename, sampleRateHz, units='pA', nADCNumChannels=1, 
     dataPointCount = sweepPointCount*sweepCount
 
     # predict how large our file must be and create a byte array of that size
-    bytesPerPoint = 2
+    if FLOAT:
+        bytesPerPoint = 4 # LJK
+    else:
+        bytesPerPoint = 2
+    
     dataBlocks = int(dataPointCount * bytesPerPoint / BLOCKSIZE) + 1
     data = bytearray((dataBlocks + HEADER_BLOCKS) * BLOCKSIZE)
 
@@ -89,6 +94,10 @@ def writeABF1(sweepData, filename, sampleRateHz, units='pA', nADCNumChannels=1, 
         while len(unitString[i]) < 8: # pad with spaces 
             unitString[i] = unitString[i] + " "
         names.append(f'V{i}')
+        try:
+            names[i] = names_input[i]
+        except: # name is not input
+            pass
         while len(names[i])<10:
             names[i] = names[i] + " "
 
@@ -119,7 +128,10 @@ def writeABF1(sweepData, filename, sampleRateHz, units='pA', nADCNumChannels=1, 
         for valueNumber, value in enumerate(sweepSignal):
             valueByteOffset = valueNumber * bytesPerPoint
             bytePosition = dataByteOffset + sweepByteOffset + valueByteOffset
-            struct.pack_into('h', data, bytePosition, int(value*valueScale))
+            if FLOAT:
+                struct.pack_into('f', data, bytePosition, value) # f is a 4 byte float -- LJK 
+            else:
+                struct.pack_into('h', data, bytePosition, int(value*valueScale)) # h is a short (2 byte integer)
 
     # save the byte array to disk
     with open(filename, 'wb') as f:

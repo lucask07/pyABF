@@ -21,21 +21,9 @@ except:
 
 abf_f = 'test65.abf'
 
-def interleave_np(l_arr):
-    # interleave multiple arrays before writing ABF 
-    # l_arr: list of arrays (all same length)
-    sz = [a.size for a in l_arr]
-    print(sz)
-    if not all(x==sz[0] for x in sz):
-        print('Error list of arrays must all have the same length')
-        return -1
-    composite = np.empty((1,np.sum(sz)), dtype=l_arr[0].dtype)
-    num_el = len(l_arr)
-    for idx, a in enumerate(l_arr):
-        composite[0,idx::num_el] = a
-    return composite
-
 from pyabf.abfWriter import writeABF1
+from pyabf.tools.covg import interleave_np
+
 x = np.vstack((np.linspace(0,3,512*8), np.linspace(0,33,512*8))) # this creates two sweeps 
 # need to interleave 2 channels 
 comp = interleave_np([x[0,:],x[1,:]])
