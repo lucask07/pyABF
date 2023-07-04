@@ -17,11 +17,16 @@ import struct
 import numpy as np
 
 
-def writeABF1(sweepData, filename, sampleRateHz, units='pA', nADCNumChannels=1, FLOAT=False, names_input = []):
+def writeABF1(sweepData, filename, sampleRateHz, units='pA', 
+              nADCNumChannels=1, FLOAT=False, names_input = [], DEBUG=False):
     """
     Create an ABF1 file from scratch and write it to disk.
     Files created with this function are compatible with MiniAnalysis.
     Data is expected to be a 2D numpy array (each row is a sweep).
+    
+    the sampleRateHz is assumed to be divided among all ADC channels
+        so if sampling in parallel increase the sample rate by the number of channels
+    
     """
 
     assert isinstance(sweepData, np.ndarray)
@@ -101,13 +106,15 @@ def writeABF1(sweepData, filename, sampleRateHz, units='pA', nADCNumChannels=1, 
         while len(names[i])<10:
             names[i] = names[i] + " "
 
-    print(names)
-    print(unitString)
+    if DEBUG:
+        print(names)
+        print(unitString)
     # store the scale data in the header
     struct.pack_into('i', data, 252, lADCResolution)
     struct.pack_into('f', data, 244, fADCRange)
     for i in range(16):
-        print(f'Unit string {unitString[i]} and name {names[i]}')
+        if DEBUG:
+            print(f'Unit string {unitString[i]} and name {names[i]}')
         struct.pack_into('f', data, 922+i*4, fInstrumentScaleFactor)
         struct.pack_into('f', data, 1050+i*4, fSignalGain)
         struct.pack_into('f', data, 730+i*4, fADCProgrammableGain)
@@ -122,7 +129,8 @@ def writeABF1(sweepData, filename, sampleRateHz, units='pA', nADCNumChannels=1, 
             
     # fill data portion with scaled data from signal
     dataByteOffset = BLOCKSIZE * HEADER_BLOCKS
-    print(f'databyteOffset {dataByteOffset}; greatest header offset {1050+i*15}')
+    if DEBUG:
+        print(f'databyteOffset {dataByteOffset}; greatest header offset {1050+i*15}')
     for sweepNumber, sweepSignal in enumerate(sweepData):
         sweepByteOffset = sweepNumber * sweepPointCount * bytesPerPoint
         for valueNumber, value in enumerate(sweepSignal):
