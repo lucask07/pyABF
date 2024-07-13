@@ -3,8 +3,8 @@ from setuptools import setup
 from setuptools import find_packages
 import sys
 
-if sys.version_info[:2] < (3, 6):
-    raise RuntimeError("Python version >= 3.6 required.")
+if sys.version_info[:2] < (3, 8):
+    raise RuntimeError("Python version >= 3.8 required.")
 
 # load the description
 PATH_HERE = os.path.abspath(os.path.dirname(__file__))
@@ -14,10 +14,10 @@ with open(os.path.abspath(PATH_HERE+"/README.rst")) as f:
 # standard pypi stuff
 setup(
     name='pyabf',
-    version='2.3.7',
+    version='2.3.8',
     author='Scott W Harden',
     author_email='SWHarden@gmail.com',
-    python_requires='>=3.6',
+    python_requires='>=3.8',
     packages=find_packages(),
     include_package_data=True,
     url='http://swharden.com/pyabf',
